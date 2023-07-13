@@ -18,15 +18,20 @@ These files also have two additional dependencies: [Ektelo](https://github.com/e
 
 ## Usage
 
-1. Solve the dependencies with ```requirements.txt```. Note that we only support Python 3.
+1. Before we start, if you are only testing non-UDF parts, you could remove
+the ```pycopg2``` and ```sqlalchemy``` in the ```requirements.txt```. Moreover, when you are testing the UDF part in a Linux system like ```Ubuntu```, 
+you should check whether ```python-psycopg2``` and ```libpq-dev``` is installed, or you should use ```apt``` to get them before you solve the requirements.
+
+2. Solve the dependencies with ```requirements.txt```. Note that we only support Python 3. 
+
 ```
 $ pip install -r requirements.txt
 ```
-2. Export the ```src``` file to path. For example, in Windows, you may use:
+3. Export the ```src``` file to path. For example, in Windows, you may use:
 ```
 $Env:PYTHONPATH += ";X:\DADP\src"
 ```
-1. Run the mechanism under ```mechanisms``` for initialization phase, then run the corresponding mechanism under ```da-mechanisms```.
+4. Run the mechanism under ```mechanisms``` for initialization phase, then run the corresponding mechanism under ```da-mechanisms```.
 
 ## Utility usage
 * ```\da-mechanisms\werror.py``` - Calculate the workload error for a given preferred attributes file ```prefer.csv```.
