@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This code-base contains two examples of DADP-Combined mechanisms, which combine the DADP framework with state-of-art graphic model-based data synthesis mechanisms, the MWEM+PGM and AIM.
+This code base contains two construction examples of DADP, which construct with state-of-art iterative graphic model-based data synthesis mechanisms, the MWEM+PGM and AIM.
 
 For more details on Private-PGM, please visit [Private-PGM](https://github.com/ryan112358/private-pgm).
 
