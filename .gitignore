@@ -3,3 +3,4 @@ Results/
 tests/
 magicword.txt
 data/prefercliques
+__pycache__/
