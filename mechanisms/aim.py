@@ -10,9 +10,15 @@ from mbi import Factor
 import argparse
 import time
 
-# Before using this or any other mechanisms in Private-PGM, make sure you have
-# already prepared source code of hdmm and mbi for dependences and put the "src" 
-# folder's path to PYTHONPATH.
+"""
+This file contains a DADP construction example in the update phase.
+For more details of Private-PGM and its implemention, please visit
+https://github.com/ryan112358/private-pgm
+
+Before using this or any other mechanisms in DADP, make sure you have
+already prepared source code of hdmm and mbi for dependences and put the "src" 
+folder's path to PYTHONPATH.
+"""
 
 def powerset(iterable): # Calculting for powerset
     "powerset([1,2,3]) --> (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
@@ -78,7 +84,7 @@ class AIM(Mechanism):
         epsilon = np.sqrt(8*0.1*self.rho/rounds)
        
         measurements = []
-        cliques = [] # For clique save
+        cliques = [] #DADP:For clique save
 
         time_start = time.time()
         print(self.rho)
@@ -141,7 +147,7 @@ class AIM(Mechanism):
 
         if cliquesave is not '0':
             cliquepd = pd.DataFrame(cliques,columns=None)
-            cliquepd.to_csv(cliquesave+"/cliques.csv",index=False) # Save all selected cliques
+            cliquepd.to_csv(cliquesave+"/cliques.csv",index=False) #DADP: Save all selected cliques
         
 
         print('Generating Data...')
@@ -199,7 +205,7 @@ if __name__ == "__main__":
     mech = AIM(args.epsilon, args.delta, max_model_size=args.max_model_size)
     synth = mech.run(data, workload,args.cliquesave)
 
-    if args.save is not None: # Synthetic save process
+    if args.save is not None:
         synth.df.to_csv(args.save, index=False)
 
     errors = []

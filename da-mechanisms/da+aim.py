@@ -11,9 +11,15 @@ from mbi import Factor
 import argparse
 import time 
 
-# Before using this or any other mechanisms in Private-PGM, make sure you have
-# already prepared source code of hdmm and mbi for dependences and put the "src" 
-# folder's path to PYTHONPATH.
+"""
+This file contains a DADP construction example in the update phase.
+For more details of Private-PGM and its implemention, please visit
+https://github.com/ryan112358/private-pgm
+
+Before using this or any other mechanisms in DADP, make sure you have
+already prepared source code of hdmm and mbi for dependences and put the "src" 
+folder's path to PYTHONPATH.
+"""
 
 
 def powerset(iterable): # Calculting for powerset
@@ -45,17 +51,16 @@ class AIM(Mechanism):
         self.cliques_in = cliques_in
 
     def run(self, data, W):
-        rounds = self.rounds or 16*len(data.domain) # Here we using the original rounds limit, to achieve same 1-way calc budget
+        rounds = self.rounds or 16*len(data.domain) #DADP: Here we using the original rounds limit, to achieve same 1-way calc budget
     
-        # Read cliques
         cliques = []
-        cliquepd = pd.read_csv(self.cliques_in).values.tolist()
+        cliquepd = pd.read_csv(self.cliques_in).values.tolist() #DADP: Get selected cliques
         for line in cliquepd:
             if line[1] is np.nan:
                 cliques.append((line[0],))
             else:
                 cliques.append(tuple(line))
-        # Read prefer attributes
+        #DADP:Load prefer cliques from file
         prefer_pd =  pd.read_csv("./data/prefer.csv").values.tolist()
         for line in prefer_pd:
             if line[1] is np.nan:
@@ -74,7 +79,6 @@ class AIM(Mechanism):
 
         
         sigma = np.sqrt(rounds / (2*0.9*self.rho))
-        # epsilon = np.sqrt(8*0.1*self.rho / rounds)
 
        
         measurements = []
@@ -93,41 +97,37 @@ class AIM(Mechanism):
         terminate = False
         
         remaining = self.rho - rho_used
-        # After the completion of a 1-way measurements, we reset the maximum number of rounds to be equal to the total length of cliques (with prefer attributes), in order to avoid allocating too much budget for 1-way measurements. 
+        # DADP: After the completion of a 1-way measurements, we reset the maximum number of rounds to be equal to the total length of cliques (with prefer attributes), in order to avoid allocating too much budget for 1-way measurements. 
         # Once this is set, the subsequent process can be considered as allocating a fixed budget per round.
         rounds = len(cliques) 
-        sigma = np.sqrt(rounds / (2 * remaining)) # Re-design sigma
+        sigma = np.sqrt(rounds / (2 * remaining)) #DADP: Re-design sigma
         print("!!!Re-design sigma after one-way!")
         print("New sigma:",sigma)
 
         while t < rounds and not terminate:
             t += 1
             cl = None
-            # if (self.rho - rho_used < 1.0/8 * epsilon**2 +0.5/sigma**2):
-            if (self.rho - rho_used <0.5/sigma**2): # Change the limitation
+            if (self.rho - rho_used <0.5/sigma**2): #DADP: Change the limitation
                 # Just use up whatever remaining budget there is for one last round
                 remaining = self.rho - rho_used
                 sigma = np.sqrt(1 / (2*0.9*remaining))
                 # We do not needs epsilon here
                 # epsilon = np.sqrt(8*0.1*remaining) 
                 terminate = True
-            # We do not needs epsilon here
-            # rho_used += 1.0/8 * epsilon**2 + 0.5/sigma**2 
-            rho_used += 0.5/sigma**2
-            cl = cliques[t-1]       
+            rho_used += 0.5/sigma**2 #DADP: Remove epsilon here
+            cl = cliques[t-1]        #DADP: Switch the original select method to reading selected cliques line by line.
             n = data.domain.size(cl)
             Q = Identity(n)
             x = data.project(cl).datavector()
             y = x + self.gaussian_noise(sigma, n)
             measurements.append((Q, y, sigma, cl))
 
-            # model = engine.estimate(measurements) # Remove iterated measurements
             print('Selected',cl,'Size',n,'Budget Used',rho_used/self.rho)
 
 
         print("Total rounds:",t)
         engine.iters = 2500
-        model = engine.estimate(measurements)
+        model = engine.estimate(measurements) #DADP: Move the estimation outside of the iteration.
         time_end = time.time()
         time_consume=int(round((time_end-time_start) * 1000))
         print('Time cost:'+str(time_consume)+' ms.Saving model, cliques and measurements...')
@@ -136,15 +136,15 @@ class AIM(Mechanism):
 
         return synth
 
-def default_params(): # ~177, Parameter defination. No actually functional code in this segment.Containing parameter initializing, function calling, etc.
+def default_params(): 
     """
     Return default parameters to run this program
 
     :returns: a dictionary of default parameter settings for each command line argument
     """
     params = {}
-    params['dataset'] = '../data/adult.csv'
-    params['domain'] = '../data/adult-domain.json'
+    params['dataset'] = '../data/colorado.csv'
+    params['domain'] = '../data/colorado-domain.json'
     params['epsilon'] = 1.0
     params['delta'] = 1e-9
     params['noise'] = 'laplace'
@@ -152,6 +152,7 @@ def default_params(): # ~177, Parameter defination. No actually functional code 
     params['degree'] = 2
     params['num_marginals'] = None
     params['max_cells'] = 10000
+    params['cliques'] = '../data/cliques.csv'
 
     return params
         
@@ -189,14 +190,14 @@ if __name__ == "__main__":
         synth.df.to_csv(args.save, index=False)
 
     errors = []
-    for proj, wgt in workload: #~188, error calc which mentioned at P2, Def.2  
+    for proj, wgt in workload:
         X = data.project(proj).datavector()
         Y = synth.project(proj).datavector()
         e = 0.5*wgt*np.linalg.norm(X/X.sum() - Y/Y.sum(), 1)
         errors.append(e)
     print('Average Error: ', np.mean(errors))
     
-    # Calc prefer error
+    #DADP: Calc prefer error
     prefer_cliques = []
     prefer_pd = pd.read_csv("./data/prefer.csv").values.tolist()
     for line in prefer_pd:

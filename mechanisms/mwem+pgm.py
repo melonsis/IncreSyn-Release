@@ -12,15 +12,9 @@ import random
 
 
 """
-This file contains an implementation of MWEM+PGM that is designed specifically for marginal query workloads.
-Unlike mwem.py, which selects a single query in each round, this implementation selects an entire marginal 
-in each step.  It leverages parallel composition to answer many more queries using the same privacy budget.
-
-This enhancement of MWEM was described in the original paper in section 3.3 (https://arxiv.org/pdf/1012.4763.pdf).
-
-There are two additional improvements not described in the original Private-PGM paper:
-- In each round we only consider candidate cliques to select if they result in sufficiently small model sizes
-- At the end of the mechanism, we generate synthetic data (rather than query answers)
+This file contains a DADP construction example in the initialization phase.
+For more details of Private-PGM and its implemention, please visit
+https://github.com/ryan112358/private-pgm
 """
 
 def worst_approximated(workload_answers, est, workload, eps, penalty=True):
@@ -90,7 +84,7 @@ def mwem_pgm(data, epsilon,cliquesave,delta=0.0, workload=None, rounds=None, max
     engine = FactoredInference(data.domain, log=False, iters=pgm_iters, warm_start=True)
     measurements = []
     est = engine.estimate(measurements, total)
-    cliques = [] #Initialized for cliques save
+    cliques = [] #DADP: Initialized for cliques save
 
     time_start = time.time()
     for i in range(1, rounds+1):
@@ -116,7 +110,7 @@ def mwem_pgm(data, epsilon,cliquesave,delta=0.0, workload=None, rounds=None, max
   
     if cliquesave is not '0':
         cliquepd = pd.DataFrame(cliques,columns=None)
-        cliquepd.to_csv(cliquesave+"/cliques.csv",index=False) #Save all selected cliques for the initialization phase
+        cliquepd.to_csv(cliquesave+"/cliques.csv",index=False) #DADP: Save all selected cliques for the update phase
 
     print('Generating Data...')
     return est.synthetic_data()

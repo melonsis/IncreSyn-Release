@@ -9,31 +9,26 @@ import argparse
 import time
 import pickle
 
-"""
-This file contains an implementation of MWEM+PGM that is designed specifically for marginal query workloads.
-Unlike mwem.py, which selects a single query in each round, this implementation selects an entire marginal 
-in each step.  It leverages parallel composition to answer many more queries using the same privacy budget.
 
-This enhancement of MWEM was described in the original paper in section 3.3 (https://arxiv.org/pdf/1012.4763.pdf).
-
-There are two additional improvements not described in the original Private-PGM paper:
-- In each round we only consider candidate cliques to select if they result in sufficiently small model sizes
-- At the end of the mechanism, we generate synthetic data (rather than query answers)
 """
+This file contains a DADP construction example in the update phase.
+For more details of Private-PGM and its implemention, please visit
+https://github.com/ryan112358/private-pgm
+
+Before using this or any other mechanisms in DADP, make sure you have
+already prepared source code of hdmm and mbi for dependences and put the "src" 
+folder's path to PYTHONPATH.
+"""
+
 
 def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb = 25, pgm_iters=100, noise='laplace'):
     """
     Implementation of a dynamic update version of MWEM+PGM
 
-    :param data_o: an *ORIGINAL* mbi.Dataset object
-    :param data_m: an *MODIFIED* mbi.Dataset object
-        In mechanism pheonix, when server needs dynamic update, the mechanism will use original and modified dataset to compute
-        next round's Q_worst.
+    :param data_in: an *ORIGINAL* mbi.Dataset object
     :param epsilon: privacy budget
     :param delta: privacy parameter (ignored)
     :param cliques_o: A list of cliques (attribute tuples) which choosen in original synthetic mechanism
-    :param mesurements_o: A list of mesurements which estimated last time
-    :param model: A graphic model estimated last time
     :param rounds: The number of rounds of MWEM to run (default: number of attributes)
     :param maxsize_mb: [New] a limit on the size of the model (in megabytes), used to filter out candidate cliques from selection.
         Used to avoid MWEM+PGM failure modes (intractable model sizes).   
@@ -47,16 +42,16 @@ def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb 
         data synthetic as workload
     """ 
     cliques = []
-    cliquepd = pd.read_csv(cliques_o).values.tolist()
+    cliquepd = pd.read_csv(cliques_o).values.tolist() #DADP:Get selected cliques
     for line in cliquepd:
         cliques.append(tuple(line)) 
-    # Add prefer cliques
+    #DADP:Add prefer cliques
     prefer_cliques = []
-    # Load prefer cliques from file
-    prefer_pd = pd.read_csv("./data/prefer.csv").values.tolist()
+    #DADP:Load prefer cliques from file
+    prefer_pd = pd.read_csv("./data/prefer.csv").values.tolist() #DADP: Get prefer cliques
     for line in prefer_pd:
             prefer_cliques.append(tuple(line))
-    # Add prefer cliques to original cliques
+    #DADP:Add prefer cliques to original cliques
     cliques += prefer_cliques
 
     if rounds is None:
@@ -82,7 +77,7 @@ def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb 
     measurements = []
     time_start = time.time()
     for i in range(1, rounds+1):
-        ax = cliques[i-1]
+        ax = cliques[i-1] #DADP: Switch the original select method to reading selected cliques line by line.
         print('Round', i, 'Selected', ax, "Eps per round =",eps_per_round)
         n = domain.size(ax)
         x = data_in.project(ax).datavector()
@@ -92,7 +87,7 @@ def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb 
             y = x + np.random.normal(loc=0, scale=marginal_sensitivity*sigma, size=n)
         Q = sparse.eye(n)
         measurements.append((Q, y, 1.0, ax))
-    est = engine.estimate(measurements, total)
+    est = engine.estimate(measurements, total) #DADP: Move the estimation outside of the iteration.
     time_end = time.time()
     time_consume=int(round((time_end-time_start) * 1000))
     print('Time cost:'+str(time_consume)+' ms. Saving model...')
@@ -106,9 +101,8 @@ def default_params():
     :returns: a dictionary of default parameter settings for each command line argument
     """
     params = {}
-    params['dataseto'] = '../data/adult.csv'
-    params['datasetm'] = '../data/adult.csv'
-    params['domain'] = '../data/adult-domain.json'
+    params['dataset'] = '../data/colorado.csv'
+    params['domain'] = '../data/colorado-domain.json'
     params['epsilon'] = 1.0
     params['delta'] = 1e-9
     params['cliques'] = '../data/cliques.csv'
@@ -169,7 +163,7 @@ if __name__ == "__main__":
         e = 0.5*np.linalg.norm(X/X.sum() - Y/Y.sum(), 1)
         errors.append(e)
     print('Average Error: ', np.mean(errors))
-    # Calc prefer attributes error
+    #DADP: Calc prefer attributes error
     prefer_cliques = []
     prefer_pd = pd.read_csv("./data/prefer.csv").values.tolist()
     for line in prefer_pd:
