@@ -1,3 +1,13 @@
+-- We strongly recommand you to delete all annotations before use.
+-- For details of implementiaon, see files in da-mechanisms and mechanisms.
+DROP FUNCTION IF EXISTS public.dp_update(text, real);
+CREATE OR REPLACE FUNCTION public.dp_update(
+	tablename text,
+	epsilon real)
+    RETURNS text
+    LANGUAGE 'plpython3u'
+AS $BODY$
+
 import numpy as np
 import itertools
 import pandas as pd
@@ -7,60 +17,16 @@ from scipy import sparse
 import argparse
 import time
 from mechanisms.cdp2adp import cdp_rho
-from photools.cliques import clique_read, clique_save
+from photools.cliques import clique_read
 import psycopg2
 from sqlalchemy import create_engine
-# Compatible to openGauss
-from sqlalchemy.dialects.postgresql.base import PGDialect 
-PGDialect._get_server_version_info = lambda *args: (9, 2)
-# When use original PostgreSQL, annotate above 2 lines
 
-"""
-This file contains an implementation of MWEM+PGM that is designed specifically for marginal query workloads.
-Unlike mwem.py, which selects a single query in each round, this implementation selects an entire marginal 
-in each step.  It leverages parallel composition to answer many more queries using the same privacy budget.
+def mwem_pgm(data_in,epsilon, delta=0.0, rounds=None, maxsize_mb = 25, pgm_iters=100, noise='laplace'):
 
-This enhancement of MWEM was described in the original paper in section 3.3 (https://arxiv.org/pdf/1012.4763.pdf).
-
-There are two additional improvements not described in the original Private-PGM paper:
-- In each round we only consider candidate cliques to select if they result in sufficiently small model sizes
-- At the end of the mechanism, we generate synthetic data (rather than query answers)
-"""
-
-def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb = 25, pgm_iters=100, noise='laplace'):
-    """
-    Implementation of a dynamic update version of MWEM+PGM
-
-    :param data_o: an *ORIGINAL* mbi.Dataset object
-    :param data_m: an *MODIFIED* mbi.Dataset object
-        In mechanism pheonix, when server needs dynamic update, the mechanism will use original and modified dataset to compute
-        next round's Q_worst.
-    :param epsilon: privacy budget
-    :param delta: privacy parameter (ignored)
-    :param cliques_o: A list of cliques (attribute tuples) which choosen in original synthetic mechanism
-    :param mesurements_o: A list of mesurements which estimated last time
-    :param model: A graphic model estimated last time
-    :param rounds: The number of rounds of MWEM to run (default: number of attributes)
-    :param maxsize_mb: [New] a limit on the size of the model (in megabytes), used to filter out candidate cliques from selection.
-        Used to avoid MWEM+PGM failure modes (intractable model sizes).   
-        Set to np.inf if you would like to run MWEM as originally described without this modification 
-        (Note it may exceed resource limits if run for too many rounds)
-
-    Implementation Notes:
-    - During each round of MWEM, one clique will be selected for measurement, but only if measuring the clique does
-        not increase size of the graphical model too much
-    - The dynamic update version *not need* workload. In this version, we used the cliques which choosen by original
-        data synthetic as workload
-    """ 
-    db_conn = psycopg2.connect(database="nktest", user="nankai", password="Gauss123456")
+    db_conn = psycopg2.connect(database="fill", user="with", password="Yourown")
     cliques = []
     cliques = clique_read(db_conn, "select_cliques")
-    # Add prefer cliques
-    prefer_cliques = []
-    # Load prefer cliques from file
-    prefer_cliques = clique_read(db_conn, "prefer_cliques")
-    # Add prefer cliques to original cliques
-    cliques += prefer_cliques
+    cliques += clique_read(db_conn, "prefer_cliques")
 
     if rounds is None:
         rounds = len(cliques)
@@ -81,12 +47,16 @@ def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb 
     total = data_in.records
     def size(cliques):
         return GraphicalModel(domain, cliques).size * 8 / 2**20
+
     engine = FactoredInference(data_in.domain, log=False, iters=pgm_iters, warm_start=True)
     measurements = []
+
     time_start = time.time()
     for i in range(1, rounds+1):
+
         ax = cliques[i-1]
         print('Round', i, 'Selected', ax, "Eps per round =",eps_per_round)
+
         n = domain.size(ax)
         x = data_in.project(ax).datavector()
         if noise == 'laplace':
@@ -95,27 +65,21 @@ def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb 
             y = x + np.random.normal(loc=0, scale=marginal_sensitivity*sigma, size=n)
         Q = sparse.eye(n)
         measurements.append((Q, y, 1.0, ax))
+
     est = engine.estimate(measurements, total)
+
     time_end = time.time()
     time_consume=int(round((time_end-time_start) * 1000))
     plpy.notice('Time cost:'+str(time_consume)+' ms.')
     print('Generating Data...')
+
     return est.synthetic_data()
 
 def default_params():
-    """
-    Return default parameters to run this program
 
-    :returns: a dictionary of default parameter settings for each command line argument
-    """
     params = {}
-    params['dataseto'] = '../data/adult.csv'
-    params['datasetm'] = '../data/adult.csv'
-    params['domain'] = '../data/adult-domain.json'
     params['epsilon'] = 1.0
     params['delta'] = 1e-9
-    params['cliques'] = '../data/cliques.csv'
-    params['model'] = '../data/models'
     params['rounds'] = None
     params['noise'] = 'laplace'
     params['max_model_size'] = 25
@@ -131,11 +95,8 @@ if __name__ == "__main__":
     description = ''
     formatter = argparse.ArgumentDefaultsHelpFormatter
     parser = argparse.ArgumentParser(description=description, formatter_class=formatter)
-    parser.add_argument('--dataset', help='Modified dataset to use')
-    parser.add_argument('--domain', help='domain to use')
     parser.add_argument('--epsilon', type=float, help='privacy parameter')
     parser.add_argument('--delta', type=float, help='privacy parameter')
-    parser.add_argument('--cliques',help='Cliques to use')
     parser.add_argument('--rounds', type=int, help='number of rounds of MWEM to run')
     parser.add_argument('--noise', choices=['laplace','gaussian'], help='noise distribution to use')
     parser.add_argument('--max_model_size', type=float, help='maximum size (in megabytes) of model')
@@ -145,29 +106,39 @@ if __name__ == "__main__":
     parser.add_argument('--max_cells', type=int, help='maximum number of cells for marginals in workload')
 
     parser.add_argument('--pgm_iters', type=int, help='number of iterations')
-    parser.add_argument('--save', type=str, help='path to save synthetic data')
 
     parser.set_defaults(**default_params())
     args = parser.parse_args()
-    # Load data from openGauss
+
     data = Dataset.load(tablename)
+    previous_synth = tablename+'_synth'
+
+    data_previous = Dataset.load(previous_synth)
+    plpy.notice("Loaded records, checking diff...")
+    diff = len(data.df) - len(data_previous.df)
+
+    if diff > 0:
+        plpy.notice("Updating "+str(diff)+" records")
+        data.df = data.df[len(data_previous.df):]
+    else:
+        plpy.notice("WARNING: Size of synthetic data is greater than original data! Using full dataset...")
+
 
     workload = list(itertools.combinations(data.domain, args.degree))
     workload = [cl for cl in workload if data.domain.size(cl) <= args.max_cells]
     if args.num_marginals is not None:
         workload = [workload[i] for i in prng.choice(len(workload), args.num_marginals, replace=False)]
-    
-    plpy.notice("Loaded records, starting synthesis")
+    plpy.notice("Starting update.")
+
     synth = mwem_pgm(data, args.epsilon, args.delta, 
-                    cliques_o=args.cliques,
                     rounds=args.rounds,
                     maxsize_mb=args.max_model_size,
                     pgm_iters=args.pgm_iters)
-    
-    connection = 'postgresql+psycopg2://nankai:Gauss123456@localhost:5432/nktest'
+
+    connection = 'postgresql+psycopg2://Fill:With@localhost:5432/yourown'
     engine= create_engine(connection)
-    synth.df.to_sql(name=str(tablename)+'_synth_update', con=engine,index=False)
-    
+    synth.df.to_sql(name=str(tablename)+'_synth', con=engine, index=False, if_exists = 'append') 
+
     errors = []
     for proj in workload:
         X = data.project(proj).datavector()
@@ -175,10 +146,7 @@ if __name__ == "__main__":
         e = 0.5*np.linalg.norm(X/X.sum() - Y/Y.sum(), 1)
         errors.append(e)
     plpy.notice('Average Error: ', np.mean(errors))
-    
-    # Calc prefer attributes error
-    prefer_cliques = []
-    # Load prefer cliques from file
+
     prefer_cliques = clique_read(db_conn, "prefer_cliques")
     errors_p = []
     for proj in prefer_cliques:
@@ -186,4 +154,8 @@ if __name__ == "__main__":
         Y = synth.project(proj).datavector()
         e = 0.5*np.linalg.norm(X/X.sum() - Y/Y.sum(), 1)
         errors_p.append(e)
-    plpy.notice('Average Error in Preferred Cliques: ',np.mean(errors_p))
+    plpy.notice('Average Error in preferred Cliques: ',np.mean(errors_p))
+        $BODY$;
+
+ALTER FUNCTION public.dp_update(text, real)
+    OWNER TO test;

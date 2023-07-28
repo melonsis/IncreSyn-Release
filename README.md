@@ -35,3 +35,6 @@ $Env:PYTHONPATH += ";X:\DADP\src"
 
 ## Utility usage
 * ```\da-mechanisms\werror.py``` - Calculate the workload error for a given preferred attributes file ```prefer.csv```.
+
+## UDF usage
+See ```README.md``` in ```/UDF```.
