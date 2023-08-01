@@ -9,5 +9,5 @@ future>=0.17.1
 autograd>=1.3
 autodp
 jax
-pycopg2
+psycopg2
 sqlalchemy
