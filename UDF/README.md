@@ -11,14 +11,14 @@ or
 ~/.local/python3/lib/python3.8/site-packages/
 ```
 
-3. Create tables with structures shown below.
+3. Create tables with the structures shown below.
 
 |Name|Column name|Data Source|Note
 |----|----|----|----|
 |```dataset```|Attributes of ```dataset```|```dataset```.csv| Partial dataset for initialize, not full dataset
 |```dataset```_domain|DOMAIN, SIZE|```dataset```-domain.json|
 |```dataset```_synth_domain|DOMAIN, SIZE|```dataset```-domain.json|Same as ```dataset```_domain
-|prefer_cliques|0, 1|None|Select prefer cliques by your self, and insert it to this table.
+|prefer_cliques|0, 1|None|Select prefer cliques by yourself, and insert them into this table.
 
 4. Create ```plpython3u``` language/extension in PostgreSQL by using
 ```
