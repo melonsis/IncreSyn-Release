@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This code base contains two construction examples of DADP, which construct with state-of-art iterative graphic model-based data synthesis mechanisms, the MWEM+PGM and AIM.
+This code base contains two construction examples of DADP, constructed with two state-of-art iterative data synthesis mechanisms based on graph model, the MWEM+PGM and AIM.
 
 For more details on Private-PGM, please visit [Private-PGM](https://github.com/ryan112358/private-pgm).
 
@@ -13,14 +13,14 @@ These files also have two additional dependencies: [Ektelo](https://github.com/e
 * mechanisms - Contains DADP-Combined mechanisms, which are modified for the initialization phase of DADP.
 * da-mechanisms - Contains DADP-combined mechanisms for the update phase and some dataset utility tools.
 * data - Contains datasets, selected cliques produced in the initialization phase, and preferred cliques.
-* src - Contains some dependencies of PGM-Based mechanisms.
+* src - Contains some dependencies of PGM-based mechanisms.
 * UDF - Contains example DADP-combined UDFs. 
 
 ## Usage
 
 1. Before we start, if you are only testing non-UDF parts, you could remove
 the ```pycopg2``` and ```sqlalchemy``` in the ```requirements.txt```. Moreover, when you are testing the UDF part in a Linux system like ```Ubuntu```, 
-you should check whether ```python-psycopg2``` and ```libpq-dev``` is installed, or you should use ```apt``` to get them before you solve the requirements.
+you should check whether ```python-psycopg2``` and ```libpq-dev``` are installed, or you should use ```apt``` to get them before you solve the requirements.
 
 2. Solve the dependencies with ```requirements.txt```. Note that we only support Python 3. 
 
