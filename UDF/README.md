@@ -1,7 +1,7 @@
 # UDF guide
 Here we instruct how to use our provided UDFs.
 ## Preparation
-1. Set database connect information in ```/UDF_dependencies/mbi/dataset.py```, ```DADP_Initialize.sql``` and  ```DADP_Update.sql```.
+1. Set database connect information in ```/UDF_dependencies/mbi/dataset.py```, ```IncreSyn_Initialize.sql``` and  ```IncreSyn_Update.sql```.
 2. Copy all folders in  ```UDF_dependencies``` to your Python site-package folder, like
 ```
 /usr/local/python3/lib/python3.8/site-packages/
@@ -25,12 +25,12 @@ or
 CREATE EXTENSION plpython3u;
 ```
 ## Usage
-1. Import ```DADP_Initialize.sql``` and ```DADP_Update.sql``` to PostgreSQL with ```psql``` or simply paste the content of files which mentioned.
-2. Run ```DADP_Initialize()``` with
+1. Import ```IncreSyn_Initialize.sql``` and ```IncreSyn_Update.sql``` to PostgreSQL with ```psql``` or simply paste the content of files which mentioned.
+2. Run ```IncreSyn_Initialize()``` with
 ```
-SELECT dadp_init(dataset, budget);
+SELECT IncreSyn_init(dataset, budget);
 ```
-3. Insert more records to table ```dataset```, then run ```DADP_Update()``` with
+3. Insert more records to table ```dataset```, then run ```IncreSyn_Update()``` with
 ```
-SELECT dadp_update(dataset, budget);
+SELECT IncreSyn_update(dataset, budget);
 ```

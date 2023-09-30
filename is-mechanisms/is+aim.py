@@ -1,4 +1,3 @@
-
 import numpy as np
 import itertools
 from mbi import Dataset, GraphicalModel, FactoredInference, Domain
@@ -12,11 +11,11 @@ import argparse
 import time 
 
 """
-This file contains a DADP construction example in the update phase.
+This file contains a IncreSyn construction example in the update phase.
 For more details of Private-PGM and its implemention, please visit
 https://github.com/ryan112358/private-pgm
 
-Before using this or any other mechanisms in DADP, make sure you have
+Before using this or any other mechanisms in IncreSyn, make sure you have
 already prepared source code of hdmm and mbi for dependences and put the "src" 
 folder's path to PYTHONPATH.
 """
@@ -51,16 +50,16 @@ class AIM(Mechanism):
         self.cliques_in = cliques_in
 
     def run(self, data, W):
-        rounds = self.rounds or 16*len(data.domain) #DADP: Here we using the original rounds limit, to achieve same 1-way calc budget
+        rounds = self.rounds or 16*len(data.domain) #IncreSyn: Here we using the original rounds limit, to achieve same 1-way calc budget
     
         cliques = []
-        cliquepd = pd.read_csv(self.cliques_in).values.tolist() #DADP: Get selected cliques
+        cliquepd = pd.read_csv(self.cliques_in).values.tolist() #IncreSyn: Get selected cliques
         for line in cliquepd:
             if line[1] is np.nan:
                 cliques.append((line[0],))
             else:
                 cliques.append(tuple(line))
-        #DADP:Load prefer cliques from file
+        #IncreSyn:Load prefer cliques from file
         prefer_pd =  pd.read_csv("./data/prefer.csv").values.tolist()
         for line in prefer_pd:
             if line[1] is np.nan:
@@ -97,25 +96,25 @@ class AIM(Mechanism):
         terminate = False
         
         remaining = self.rho - rho_used
-        # DADP: After the completion of a 1-way measurements, we reset the maximum number of rounds to be equal to the total length of cliques (with prefer attributes), in order to avoid allocating too much budget for 1-way measurements. 
+        # IncreSyn: After the completion of a 1-way measurements, we reset the maximum number of rounds to be equal to the total length of cliques (with prefer attributes), in order to avoid allocating too much budget for 1-way measurements. 
         # Once this is set, the subsequent process can be considered as allocating a fixed budget per round.
         rounds = len(cliques) 
-        sigma = np.sqrt(rounds / (2 * remaining)) #DADP: Re-design sigma
+        sigma = np.sqrt(rounds / (2 * remaining)) #IncreSyn: Re-design sigma
         print("!!!Re-design sigma after one-way!")
         print("New sigma:",sigma)
 
         while t < rounds and not terminate:
             t += 1
             cl = None
-            if (self.rho - rho_used <0.5/sigma**2): #DADP: Change the limitation
+            if (self.rho - rho_used <0.5/sigma**2): #IncreSyn: Change the limitation
                 # Just use up whatever remaining budget there is for one last round
                 remaining = self.rho - rho_used
                 sigma = np.sqrt(1 / (2*0.9*remaining))
                 # We do not needs epsilon here
                 # epsilon = np.sqrt(8*0.1*remaining) 
                 terminate = True
-            rho_used += 0.5/sigma**2 #DADP: Remove epsilon here
-            cl = cliques[t-1]        #DADP: Switch the original select method to reading selected cliques line by line.
+            rho_used += 0.5/sigma**2 #IncreSyn: Remove epsilon here
+            cl = cliques[t-1]        #IncreSyn: Switch the original select method to reading selected cliques line by line.
             n = data.domain.size(cl)
             Q = Identity(n)
             x = data.project(cl).datavector()
@@ -127,7 +126,7 @@ class AIM(Mechanism):
 
         print("Total rounds:",t)
         engine.iters = 2500
-        model = engine.estimate(measurements) #DADP: Move the estimation outside of the iteration.
+        model = engine.estimate(measurements) #IncreSyn: Move the estimation outside of the iteration.
         time_end = time.time()
         time_consume=int(round((time_end-time_start) * 1000))
         print('Time cost:'+str(time_consume)+' ms.Saving model, cliques and measurements...')
@@ -197,7 +196,7 @@ if __name__ == "__main__":
         errors.append(e)
     print('Average Error: ', np.mean(errors))
     
-    #DADP: Calc prefer error
+    #IncreSyn: Calc prefer error
     prefer_cliques = []
     prefer_pd = pd.read_csv("./data/prefer.csv").values.tolist()
     for line in prefer_pd:

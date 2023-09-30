@@ -11,11 +11,11 @@ import pickle
 
 
 """
-This file contains a DADP construction example in the update phase.
+This file contains a IncreSyn construction example in the update phase.
 For more details of Private-PGM and its implemention, please visit
 https://github.com/ryan112358/private-pgm
 
-Before using this or any other mechanisms in DADP, make sure you have
+Before using this or any other mechanisms in IncreSyn, make sure you have
 already prepared source code of hdmm and mbi for dependences and put the "src" 
 folder's path to PYTHONPATH.
 """
@@ -42,16 +42,16 @@ def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb 
         data synthetic as workload
     """ 
     cliques = []
-    cliquepd = pd.read_csv(cliques_o).values.tolist() #DADP:Get selected cliques
+    cliquepd = pd.read_csv(cliques_o).values.tolist() #IncreSyn:Get selected cliques
     for line in cliquepd:
         cliques.append(tuple(line)) 
-    #DADP:Add prefer cliques
+    #IncreSyn:Add prefer cliques
     prefer_cliques = []
-    #DADP:Load prefer cliques from file
-    prefer_pd = pd.read_csv("./data/prefer.csv").values.tolist() #DADP: Get prefer cliques
+    #IncreSyn:Load prefer cliques from file
+    prefer_pd = pd.read_csv("./data/prefer.csv").values.tolist() #IncreSyn: Get prefer cliques
     for line in prefer_pd:
             prefer_cliques.append(tuple(line))
-    #DADP:Add prefer cliques to original cliques
+    #IncreSyn:Add prefer cliques to original cliques
     cliques += prefer_cliques
 
     if rounds is None:
@@ -77,7 +77,7 @@ def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb 
     measurements = []
     time_start = time.time()
     for i in range(1, rounds+1):
-        ax = cliques[i-1] #DADP: Switch the original select method to reading selected cliques line by line.
+        ax = cliques[i-1] #IncreSyn: Switch the original select method to reading selected cliques line by line.
         print('Round', i, 'Selected', ax, "Eps per round =",eps_per_round)
         n = domain.size(ax)
         x = data_in.project(ax).datavector()
@@ -87,7 +87,7 @@ def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb 
             y = x + np.random.normal(loc=0, scale=marginal_sensitivity*sigma, size=n)
         Q = sparse.eye(n)
         measurements.append((Q, y, 1.0, ax))
-    est = engine.estimate(measurements, total) #DADP: Move the estimation outside of the iteration.
+    est = engine.estimate(measurements, total) #IncreSyn: Move the estimation outside of the iteration.
     time_end = time.time()
     time_consume=int(round((time_end-time_start) * 1000))
     print('Time cost:'+str(time_consume)+' ms. Saving model...')
@@ -163,7 +163,7 @@ if __name__ == "__main__":
         e = 0.5*np.linalg.norm(X/X.sum() - Y/Y.sum(), 1)
         errors.append(e)
     print('Average Error: ', np.mean(errors))
-    #DADP: Calc prefer attributes error
+    #IncreSyn: Calc prefer attributes error
     prefer_cliques = []
     prefer_pd = pd.read_csv("./data/prefer.csv").values.tolist()
     for line in prefer_pd:
