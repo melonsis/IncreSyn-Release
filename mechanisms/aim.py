@@ -11,11 +11,11 @@ import argparse
 import time
 
 """
-This file contains a DADP construction example in the update phase.
+This file contains a IncreSyn construction example in the update phase.
 For more details of Private-PGM and its implemention, please visit
 https://github.com/ryan112358/private-pgm
 
-Before using this or any other mechanisms in DADP, make sure you have
+Before using this or any other mechanisms in IncreSyn, make sure you have
 already prepared source code of hdmm and mbi for dependences and put the "src" 
 folder's path to PYTHONPATH.
 """
@@ -84,7 +84,7 @@ class AIM(Mechanism):
         epsilon = np.sqrt(8*0.1*self.rho/rounds)
        
         measurements = []
-        cliques = [] #DADP:For clique save
+        cliques = [] #IncreSyn:For clique save
 
         time_start = time.time()
         print(self.rho)
@@ -147,7 +147,7 @@ class AIM(Mechanism):
 
         if cliquesave is not '0':
             cliquepd = pd.DataFrame(cliques,columns=None)
-            cliquepd.to_csv(cliquesave+"/cliques.csv",index=False) #DADP: Save all selected cliques
+            cliquepd.to_csv(cliquesave+"/cliques.csv",index=False) #IncreSyn: Save all selected cliques
         
 
         print('Generating Data...')

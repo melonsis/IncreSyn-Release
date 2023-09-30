@@ -12,7 +12,7 @@ import random
 
 
 """
-This file contains a DADP construction example in the initialization phase.
+This file contains a IncreSyn construction example in the initialization phase.
 For more details of Private-PGM and its implemention, please visit
 https://github.com/ryan112358/private-pgm
 """
@@ -84,7 +84,7 @@ def mwem_pgm(data, epsilon,cliquesave,delta=0.0, workload=None, rounds=None, max
     engine = FactoredInference(data.domain, log=False, iters=pgm_iters, warm_start=True)
     measurements = []
     est = engine.estimate(measurements, total)
-    cliques = [] #DADP: Initialized for cliques save
+    cliques = [] #IncreSyn: Initialized for cliques save
 
     time_start = time.time()
     for i in range(1, rounds+1):
@@ -110,7 +110,7 @@ def mwem_pgm(data, epsilon,cliquesave,delta=0.0, workload=None, rounds=None, max
   
     if cliquesave is not '0':
         cliquepd = pd.DataFrame(cliques,columns=None)
-        cliquepd.to_csv(cliquesave+"/cliques.csv",index=False) #DADP: Save all selected cliques for the update phase
+        cliquepd.to_csv(cliquesave+"/cliques.csv",index=False) #IncreSyn: Save all selected cliques for the update phase
 
     print('Generating Data...')
     return est.synthetic_data()

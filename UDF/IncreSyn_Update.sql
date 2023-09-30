@@ -1,7 +1,7 @@
 -- We strongly recommand you to delete all annotations before use.
--- For details of implementiaon, see files in da-mechanisms and mechanisms.
-DROP FUNCTION IF EXISTS public.dp_update(text, real);
-CREATE OR REPLACE FUNCTION public.dp_update(
+-- For details of implementiaon, see files in is-mechanisms and mechanisms.
+DROP FUNCTION IF EXISTS public.incresyn_update(text, real);
+CREATE OR REPLACE FUNCTION public.incresyn__update(
 	tablename text,
 	epsilon real)
     RETURNS text
@@ -157,5 +157,5 @@ if __name__ == "__main__":
     plpy.notice('Average Error in preferred Cliques: ',np.mean(errors_p))
         $BODY$;
 
-ALTER FUNCTION public.dp_update(text, real)
+ALTER FUNCTION public.incresyn__update(text, real)
     OWNER TO test;

@@ -1,7 +1,7 @@
 -- We strongly recommand you to delete all annotations before use.
--- For details of implementiaon, see files in da-mechanisms and mechanisms.
-DROP FUNCTION IF EXISTS public.dadp_init(text, real);
-CREATE OR REPLACE FUNCTION public.dadp_init(
+-- For details of implementiaon, see files in is-mechanisms and mechanisms.
+DROP FUNCTION IF EXISTS public.incresyn_init(text, real);
+CREATE OR REPLACE FUNCTION public.incresyn_init(
 	tablename text,
 	epsilon real)
     RETURNS text
@@ -159,5 +159,5 @@ if __name__ == "__main__":
     plpy.notice('Average Error: ', np.mean(errors))
     $BODY$;
 
-ALTER FUNCTION public.dadp_init(text, real)
+ALTER FUNCTION public.incresyn_init(text, real)
     OWNER TO test;
