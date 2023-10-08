@@ -1,7 +1,7 @@
--- We strongly recommand you to delete all annotations before use.
--- For details of implementiaon, see files in is-mechanisms and mechanisms.
+-- We strongly recommend you to delete all annotations before use.
+-- For details of implemention, see files in is-mechanisms and mechanisms.
 DROP FUNCTION IF EXISTS public.incresyn_update(text, real);
-CREATE OR REPLACE FUNCTION public.incresyn__update(
+CREATE OR REPLACE FUNCTION public.incresyn_update(
 	tablename text,
 	epsilon real)
     RETURNS text
@@ -21,7 +21,20 @@ from photools.cliques import clique_read
 import psycopg2
 from sqlalchemy import create_engine
 
-def mwem_pgm(data_in,epsilon, delta=0.0, rounds=None, maxsize_mb = 25, pgm_iters=100, noise='laplace'):
+def worst_approximated(workload_answers, est, workload, eps, penalty=True):
+    errors = np.array([])
+    for cl in workload:
+        bias = est.domain.size(cl) if penalty else 0
+        x = workload_answers[cl]
+        xest = est.project(cl).datavector()
+        errors = np.append(errors, np.abs(x - xest).sum()-bias)
+    sensitivity = 2.0
+    prob = softmax(0.5*eps/sensitivity*(errors - errors.max()))
+    key = np.random.choice(len(errors), p=prob)
+    return workload[key]
+
+
+def mwem_pgm(data_in,epsilon, lastsyn_load,delta=0.0, rounds=None, maxsize_mb = 25, pgm_iters=100, noise='laplace'):
 
     db_conn = psycopg2.connect(database="fill", user="with", password="Yourown")
     cliques = []
@@ -29,7 +42,10 @@ def mwem_pgm(data_in,epsilon, delta=0.0, rounds=None, maxsize_mb = 25, pgm_iters
     cliques += clique_read(db_conn, "prefer_cliques")
 
     if rounds is None:
-        rounds = len(cliques)
+        if lastsyn_load is None:
+            rounds = len(cliques)
+        else:
+            rounds = len(cliques)+1
 
     if noise == 'laplace':
         eps_per_round = epsilon / (2 * rounds)
@@ -52,6 +68,14 @@ def mwem_pgm(data_in,epsilon, delta=0.0, rounds=None, maxsize_mb = 25, pgm_iters
     measurements = []
 
     time_start = time.time()
+
+    if lastsyn_load is not None: 
+        print('Last synthetic data detected, adding selection')
+        cl = worst_approximated(workload_answers = answers, est = lastsyn_load, workload = workload, eps = exp_eps)
+        eps_per_round = (epsilon - exp_eps) / (2 * rounds)
+        sigma = 1.0 / eps_per_round 
+        cliques.append(cl)
+    
     for i in range(1, rounds+1):
 
         ax = cliques[i-1]
@@ -87,6 +111,7 @@ def default_params():
     params['degree'] = 2
     params['num_marginals'] = None
     params['max_cells'] = 10000
+    params['lastsyn'] = None
 
     return params
 
@@ -106,6 +131,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_cells', type=int, help='maximum number of cells for marginals in workload')
 
     parser.add_argument('--pgm_iters', type=int, help='number of iterations')
+    parser.add_argument('--lastsyn', help = 'last synthetic data')
 
     parser.set_defaults(**default_params())
     args = parser.parse_args()
@@ -130,7 +156,7 @@ if __name__ == "__main__":
         workload = [workload[i] for i in prng.choice(len(workload), args.num_marginals, replace=False)]
     plpy.notice("Starting update.")
 
-    synth = mwem_pgm(data, args.epsilon, args.delta, 
+    synth = mwem_pgm(data, args.epsilon, data_previous, args.delta, 
                     rounds=args.rounds,
                     maxsize_mb=args.max_model_size,
                     pgm_iters=args.pgm_iters)
@@ -157,5 +183,5 @@ if __name__ == "__main__":
     plpy.notice('Average Error in preferred Cliques: ',np.mean(errors_p))
         $BODY$;
 
-ALTER FUNCTION public.incresyn__update(text, real)
+ALTER FUNCTION public.incresyn_update(text, real)
     OWNER TO test;

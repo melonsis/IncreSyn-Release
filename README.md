@@ -10,7 +10,7 @@ These files also have two additional dependencies: [Ektelo](https://github.com/e
 
 ## File structure
 
-* mechanisms - Contains IncreSyn-Combined mechanisms, which are modified for the initialization phase of IncreSyn.
+* mechanisms - Contains IncreSyn-combined mechanisms, which are modified for the initialization phase of IncreSyn.
 * is-mechanisms - Contains IncreSyn-combined mechanisms for the update phase and some dataset utility tools.
 * data - Contains datasets, selected cliques produced in the initialization phase, and preferred cliques.
 * src - Contains some dependencies of PGM-based mechanisms.

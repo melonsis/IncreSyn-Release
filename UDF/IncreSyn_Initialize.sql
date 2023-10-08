@@ -1,5 +1,5 @@
--- We strongly recommand you to delete all annotations before use.
--- For details of implementiaon, see files in is-mechanisms and mechanisms.
+-- We strongly recommend you to delete all annotations before use.
+-- For details of implemention, see files in is-mechanisms and mechanisms.
 DROP FUNCTION IF EXISTS public.incresyn_init(text, real);
 CREATE OR REPLACE FUNCTION public.incresyn_init(
 	tablename text,
