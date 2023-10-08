@@ -10,11 +10,11 @@ These files also have two additional dependencies: [Ektelo](https://github.com/e
 
 ## File structure
 
-* mechanisms - Contains IncreSyn-combined mechanisms, which are modified for the initialization phase of IncreSyn.
-* is-mechanisms - Contains IncreSyn-combined mechanisms for the update phase and some dataset utility tools.
-* data - Contains datasets, selected cliques produced in the initialization phase, and preferred cliques.
+* mechanisms - Contains IncreSyn constructions which are modified for the original data synthesis of IncreSyn.
+* is-mechanisms - Contains IncreSyn constructions for the incremetal data synthesis and some dataset utility tools.
+* data - Contains datasets, selected cliques produced in the original data synthesis, and preferred cliques.
 * src - Contains some dependencies of PGM-based mechanisms.
-* UDF - Contains example IncreSyn-combined UDFs. 
+* UDF - Contains example UDFs. 
 
 ## Usage
 
@@ -31,7 +31,7 @@ $ pip install -r requirements.txt
 ```
 $Env:PYTHONPATH += ";X:\IncreSyn\src"
 ```
-4. Run the mechanism under ```mechanisms``` for initialization phase, then run the corresponding mechanism under ```is-mechanisms```.
+4. Run the mechanism in ```mechanisms``` for original data synthesis, then run the corresponding mechanism under ```is-mechanisms```.
 
 ## Utility usage
 * ```\is-mechanisms\werror.py``` - Calculate the workload error for a given preferred attributes file ```prefer.csv```.
