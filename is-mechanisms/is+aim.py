@@ -42,12 +42,24 @@ def compile_workload(workload):
     return { cl : score(cl) for cl in downward_closure(workload) }
 
 class AIM(Mechanism):
-    def __init__(self,epsilon,delta,prng=None,rounds=None,max_model_size=80,structural_zeros={},cliques_in = "./data/cliques.csv"):  
+    def __init__(self,epsilon,delta,lastsyn_load,prng=None,rounds=None,max_model_size=80,structural_zeros={},cliques_in = "./data/cliques.csv"):  
         super(AIM, self).__init__(epsilon, delta, prng)
         self.rounds = rounds
         self.max_model_size = max_model_size
         self.structural_zeros = structural_zeros
         self.cliques_in = cliques_in
+        self.lastsyn = lastsyn
+
+    def worst_approximated(self, candidates, answers, model, eps, sigma):
+        errors = {}
+        sensitivity = {}
+        for cl in candidates:
+            wgt = candidates[cl]
+            x = answers[cl]
+            bias = np.sqrt(2/np.pi)*sigma*model.domain.size(cl)
+            xest = model.project(cl).datavector()
+            errors[cl] = wgt * (np.linalg.norm(x - xest, 1) - bias)
+            sensitivity[cl] = abs(wgt) 
 
     def run(self, data, W):
         rounds = self.rounds or 16*len(data.domain) #IncreSyn: Here we using the original rounds limit, to achieve same 1-way calc budget
@@ -75,15 +87,24 @@ class AIM(Mechanism):
         answers = { cl : data.project(cl).datavector() for cl in candidates }
 
         oneway = [cl for cl in candidates if len(cl) == 1] 
+        rho_used = 0
 
         
         sigma = np.sqrt(rounds / (2*0.9*self.rho))
-
-       
-        measurements = []
         time_start = time.time()
+
+        #IncreSyn: When the last synthetic data is given, run the select step once
+        if self.lastsyn_load is not None: 
+            print('Last synthetic data detected, adding selection')
+            epsilon = np.sqrt(8*0.1*self.rho/rounds)
+            rho_used += epsilon
+            cl = self.worst_approximated(workload, answers, lastsyn_load, epsilon, sigma)
+            cliques.append(cl)
+
+        measurements = []
+        
         print('Initial Sigma', sigma)
-        rho_used = len(oneway)*0.5/sigma**2 
+        rho_used += len(oneway)*0.5/sigma**2 
         for cl in oneway:
             x = data.project(cl).datavector()
             y = x + self.gaussian_noise(sigma,x.size)
@@ -152,6 +173,7 @@ def default_params():
     params['num_marginals'] = None
     params['max_cells'] = 10000
     params['cliques'] = '../data/cliques.csv'
+    params['lastsyn'] = None
 
     return params
         
@@ -170,6 +192,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_cells', type=int, help='maximum number of cells for marginals in workload')
     parser.add_argument('--save', type=str, help='path to save synthetic data')
     parser.add_argument('--cliques', help='cliques that used')
+    parser.add_argument('--lastsyn', help = 'last synthetic data')
 
     parser.set_defaults(**default_params())
     args = parser.parse_args()
@@ -180,13 +203,20 @@ if __name__ == "__main__":
     workload = [cl for cl in workload if data.domain.size(cl) <= args.max_cells]
     if args.num_marginals is not None:
         workload = [workload[i] for i in prng.choice(len(workload), args.num_marginals, replace=False)]
+    
+    if args.lastsyn is not None:
+        lastsyn_load = Dataset.load(args.lastsyn, args.domain)
+    else:
+        lastsyn_load = None
+
 
     workload = [(cl, 1.0) for cl in workload]
-    mech = AIM(args.epsilon, args.delta, max_model_size=args.max_model_size,cliques_in = args.cliques)
+    mech = AIM(args.epsilon, args.delta, lastsyn_load, max_model_size=args.max_model_size,cliques_in = args.cliques)
     synth = mech.run(data, workload)
 
     if args.save is not None: # Synthetic save process
         synth.df.to_csv(args.save, index=False)
+
 
     errors = []
     for proj, wgt in workload:

@@ -20,8 +20,29 @@ already prepared source code of hdmm and mbi for dependences and put the "src"
 folder's path to PYTHONPATH.
 """
 
+def worst_approximated(workload_answers, est, workload, eps, penalty=True):
+    """ Select a (noisy) worst-approximated marginal for measurement.
+    
+    :param workload_answers: a dictionary of true answers to the workload
+        keys are cliques
+        values are numpy arrays, corresponding to the counts in the marginal
+    :param est: a GraphicalModel object that approximates the data distribution
+    :param: workload: The list of candidates to consider in the exponential mechanism
+    :param eps: the privacy budget to use for this step.
+    """
+    errors = np.array([])
+    for cl in workload:
+        bias = est.domain.size(cl) if penalty else 0
+        x = workload_answers[cl]
+        xest = est.project(cl).datavector()
+        errors = np.append(errors, np.abs(x - xest).sum()-bias)
+    sensitivity = 2.0
+    prob = softmax(0.5*eps/sensitivity*(errors - errors.max()))
+    key = np.random.choice(len(errors), p=prob)
+    return workload[key]
 
-def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb = 25, pgm_iters=100, noise='laplace'):
+
+def mwem_pgm(data_in,epsilon, lastsyn_load, delta=0.0, cliques_o=None,rounds=None, maxsize_mb = 25, pgm_iters=100, noise='laplace'):
     """
     Implementation of a dynamic update version of MWEM+PGM
 
@@ -55,7 +76,10 @@ def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb 
     cliques += prefer_cliques
 
     if rounds is None:
-        rounds = len(cliques)
+        if lastsyn_load is None:
+            rounds = len(cliques)
+        else:
+            rounds = len(cliques)+1
 
     if noise == 'laplace':
         eps_per_round = epsilon / (2 * rounds)
@@ -76,6 +100,15 @@ def mwem_pgm(data_in,epsilon, delta=0.0, cliques_o=None,rounds=None, maxsize_mb 
     engine = FactoredInference(data_in.domain, log=False, iters=pgm_iters, warm_start=True)
     measurements = []
     time_start = time.time()
+
+     #IncreSyn: When the last synthetic data is given, run the select step once
+    if lastsyn_load is not None: 
+        print('Last synthetic data detected, adding selection')
+        cl = worst_approximated(workload_answers = answers, est = lastsyn_load, workload = workload, eps = exp_eps)
+        eps_per_round = (epsilon - exp_eps) / (2 * rounds)
+        sigma = 1.0 / eps_per_round #IncreSyn: Re-calculate sigma
+        cliques.append(cl)
+
     for i in range(1, rounds+1):
         ax = cliques[i-1] #IncreSyn: Switch the original select method to reading selected cliques line by line.
         print('Round', i, 'Selected', ax, "Eps per round =",eps_per_round)
@@ -114,6 +147,7 @@ def default_params():
     params['degree'] = 2
     params['num_marginals'] = None
     params['max_cells'] = 10000
+    params['lastsyn'] = None
 
     return params
 
@@ -137,6 +171,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--pgm_iters', type=int, help='number of iterations')
     parser.add_argument('--save', type=str, help='path to save synthetic data')
+    parser.add_argument('--lastsyn', help = 'last synthetic data')
 
     parser.set_defaults(**default_params())
     args = parser.parse_args()
@@ -147,12 +182,18 @@ if __name__ == "__main__":
     workload = [cl for cl in workload if data.domain.size(cl) <= args.max_cells]
     if args.num_marginals is not None:
         workload = [workload[i] for i in prng.choice(len(workload), args.num_marginals, replace=False)]
+    
+    if args.lastsyn is not None:
+        lastsyn_load = Dataset.load(args.lastsyn, args.domain)
+    else:
+        lastsyn_load = None
 
-    synth = mwem_pgm(data, args.epsilon, args.delta, 
+    synth = mwem_pgm(data, args.epsilon,lastsyn_load, args.delta, 
                     cliques_o=args.cliques,
                     rounds=args.rounds,
                     maxsize_mb=args.max_model_size,
-                    pgm_iters=args.pgm_iters)
+                    pgm_iters=args.pgm_iters
+                    )
     if args.save is not None:
         synth.df.to_csv(args.save, index=False)
 
