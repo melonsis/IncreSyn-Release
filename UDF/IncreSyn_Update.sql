@@ -21,7 +21,7 @@ from photools.cliques import clique_read
 import psycopg2
 from sqlalchemy import create_engine
 
-def worst_approximated(workload_answers, est, workload, eps, penalty=True):
+def worst_approximated_eta(workload_answers, est, workload, eps, eta, penalty=True):
     errors = np.array([])
     for cl in workload:
         bias = est.domain.size(cl) if penalty else 0
@@ -30,13 +30,37 @@ def worst_approximated(workload_answers, est, workload, eps, penalty=True):
         errors = np.append(errors, np.abs(x - xest).sum()-bias)
     sensitivity = 2.0
     prob = softmax(0.5*eps/sensitivity*(errors - errors.max()))
-    key = np.random.choice(len(errors), p=prob)
-    return workload[key]
+    keys = np.random.choice(len(errors), p=prob,size = eta)
+    choice_cl = []
+    for key in keys:
+        choice_cl.append(workload[key])
+    return choice_cl
+
+def eta_test(data_in, lastsyn_load, syn, workload):
+    errors_last = []
+    errors_this = []
+    for proj in workload:
+        O = data_in.project(proj).datavector()
+        X = lastsyn_load.project(proj).datavector()
+        Y = syn.project(proj).datavector()
+        elast = 0.5*np.linalg.norm(O/O.sum() - X/X.sum(), 1)
+        ethis = 0.5*np.linalg.norm(O/O.sum() - Y/Y.sum(), 1)
+        errors_last.append(elast)
+        errors_this.append(ethis)
+
+    if np.mean(errors_this) < np.mean(errors_last):
+        return 1
+    else:
+        return 0 
 
 
-def mwem_pgm(data_in,epsilon, lastsyn_load,delta=0.0, rounds=None, maxsize_mb = 25, pgm_iters=100, noise='laplace'):
+def mwem_pgm(data_in,epsilon, lastsyn_load,delta=0.0, rounds=None, maxsize_mb = 25, pgm_iters=100, noise='laplace',eta_max=5):
 
     db_conn = psycopg2.connect(database="fill", user="with", password="Yourown")
+    eta = 1
+    if workload is None:
+        workload = list(itertools.combinations(data_in.domain, 2))
+    answers = { cl : data.project(cl).datavector() for cl in workload }
     cliques = []
     cliques = clique_read(db_conn, "select_cliques")
     cliques += clique_read(db_conn, "prefer_cliques")
@@ -45,7 +69,7 @@ def mwem_pgm(data_in,epsilon, lastsyn_load,delta=0.0, rounds=None, maxsize_mb = 
         if lastsyn_load is None:
             rounds = len(cliques)
         else:
-            rounds = len(cliques)+1
+            rounds = len(cliques)+eta
 
     if noise == 'laplace':
         eps_per_round = epsilon / (2 * rounds)
@@ -70,16 +94,22 @@ def mwem_pgm(data_in,epsilon, lastsyn_load,delta=0.0, rounds=None, maxsize_mb = 
     time_start = time.time()
 
     if lastsyn_load is not None: 
-        print('Last synthetic data detected, adding selection')
-        cl = worst_approximated(workload_answers = answers, est = lastsyn_load, workload = workload, eps = exp_eps)
+        plpy.notice('Last synthetic data detected, adding selection')
+        choice_cl = worst_approximated_eta(workload_answers = answers, est = lastsyn_load, workload = workload, eta=eta, eps = exp_eps)
+
+        for cl in choice_cl:
+            if cl not in cliques:
+                cliques.append(cl)
+            else:
+                rounds = rounds-1
+        
         eps_per_round = (epsilon - exp_eps) / (2 * rounds)
-        sigma = 1.0 / eps_per_round 
-        cliques.append(cl)
+        sigma = 1.0 / eps_per_round
     
     for i in range(1, rounds+1):
 
         ax = cliques[i-1]
-        print('Round', i, 'Selected', ax, "Eps per round =",eps_per_round)
+        plpy.notice('Round', i, 'Selected', ax, "Eps per round =",eps_per_round)
 
         n = domain.size(ax)
         x = data_in.project(ax).datavector()
@@ -95,9 +125,14 @@ def mwem_pgm(data_in,epsilon, lastsyn_load,delta=0.0, rounds=None, maxsize_mb = 
     time_end = time.time()
     time_consume=int(round((time_end-time_start) * 1000))
     plpy.notice('Time cost:'+str(time_consume)+' ms.')
-    print('Generating Data...')
-
-    return est.synthetic_data()
+    plpy.notice('Generating Data...')
+    syn = est.synthetic_data()
+    if lastsyn_load is not None:
+        error_comp = eta_test(data_in=data_in, lastsyn_load=lastsyn_load, syn=syn, workload=workload)
+        if (error_comp == 1) and eta < eta_max:
+            eta +=1
+            plpy.notice("Eta increased to "+str(eta))
+    return syn
 
 def default_params():
 
@@ -112,6 +147,7 @@ def default_params():
     params['num_marginals'] = None
     params['max_cells'] = 10000
     params['lastsyn'] = None
+    params['eta'] = 5
 
     return params
 
@@ -132,6 +168,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--pgm_iters', type=int, help='number of iterations')
     parser.add_argument('--lastsyn', help = 'last synthetic data')
+    parser.add_argument('--eta', type=int, help = 'Threshold of eta')
 
     parser.set_defaults(**default_params())
     args = parser.parse_args()
@@ -159,7 +196,7 @@ if __name__ == "__main__":
     synth = mwem_pgm(data, args.epsilon, data_previous, args.delta, 
                     rounds=args.rounds,
                     maxsize_mb=args.max_model_size,
-                    pgm_iters=args.pgm_iters)
+                    pgm_iters=args.pgm_iters, eta_max=eta)
 
     connection = 'postgresql+psycopg2://Fill:With@localhost:5432/yourown'
     engine= create_engine(connection)

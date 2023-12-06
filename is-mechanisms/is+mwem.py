@@ -20,8 +20,8 @@ already prepared source code of hdmm and mbi for dependences and put the "src"
 folder's path to PYTHONPATH.
 """
 
-def worst_approximated(workload_answers, est, workload, eps, penalty=True):
-    """ Select a (noisy) worst-approximated marginal for measurement.
+def worst_approximated_eta(workload_answers, est, workload, eps, eta, penalty=True):
+    """ Select eta (noisy) worst-approximated marginal for measurement.
     
     :param workload_answers: a dictionary of true answers to the workload
         keys are cliques
@@ -29,6 +29,7 @@ def worst_approximated(workload_answers, est, workload, eps, penalty=True):
     :param est: a GraphicalModel object that approximates the data distribution
     :param: workload: The list of candidates to consider in the exponential mechanism
     :param eps: the privacy budget to use for this step.
+    :param eta: the number of selected cliques
     """
     errors = np.array([])
     for cl in workload:
@@ -38,11 +39,40 @@ def worst_approximated(workload_answers, est, workload, eps, penalty=True):
         errors = np.append(errors, np.abs(x - xest).sum()-bias)
     sensitivity = 2.0
     prob = softmax(0.5*eps/sensitivity*(errors - errors.max()))
-    key = np.random.choice(len(errors), p=prob)
-    return workload[key]
+    keys = np.random.choice(len(errors), p=prob,size = eta)
+    choice_cl = []
+    for key in keys:
+        choice_cl.append(workload[key])
+    return choice_cl
+
+def eta_test(data_in, lastsyn_load, syn, workload):
+    """
+    Test function for adaptively increse eta
+    data_in: Original data
+    lastsyn_load: Last synthetic data
+    syn: Synthetic data of this time
+    workload: The workload using for test
+    """
+    errors_last = []
+    errors_this = []
+    for proj in workload:
+        O = data_in.project(proj).datavector()
+        X = lastsyn_load.project(proj).datavector()
+        Y = syn.project(proj).datavector()
+        elast = 0.5*np.linalg.norm(O/O.sum() - X/X.sum(), 1)
+        ethis = 0.5*np.linalg.norm(O/O.sum() - Y/Y.sum(), 1)
+        errors_last.append(elast)
+        errors_this.append(ethis)
+
+    if np.mean(errors_this) < np.mean(errors_last):
+        return 1
+    else:
+        return 0 
+    
 
 
-def mwem_pgm(data_in,epsilon, lastsyn_load, delta=0.0, cliques_o=None,rounds=None, maxsize_mb = 25, pgm_iters=100, noise='laplace'):
+
+def mwem_pgm(data_in,epsilon, lastsyn_load, delta=0.0, cliques_o=None,rounds=None, workload = None, maxsize_mb = 25, pgm_iters=100, noise='laplace', eta_max=5):
     """
     Implementation of a dynamic update version of MWEM+PGM
 
@@ -59,9 +89,13 @@ def mwem_pgm(data_in,epsilon, lastsyn_load, delta=0.0, cliques_o=None,rounds=Non
     Implementation Notes:
     - During each round of MWEM, one clique will be selected for measurement, but only if measuring the clique does
         not increase size of the graphical model too much
-    - The dynamic update version *not need* workload. In this version, we used the cliques which choosen by original
-        data synthetic as workload
     """ 
+    eta = 1 # IncreSyn: Initialzed an eta = 1
+    if workload is None:
+        workload = list(itertools.combinations(data_in.domain, 2))
+    
+    answers = { cl : data.project(cl).datavector() for cl in workload } #IncreSyn: Get workload answers
+
     cliques = []
     cliquepd = pd.read_csv(cliques_o).values.tolist() #IncreSyn:Get selected cliques
     for line in cliquepd:
@@ -79,7 +113,7 @@ def mwem_pgm(data_in,epsilon, lastsyn_load, delta=0.0, cliques_o=None,rounds=Non
         if lastsyn_load is None:
             rounds = len(cliques)
         else:
-            rounds = len(cliques)+1
+            rounds = len(cliques)+eta
 
     if noise == 'laplace':
         eps_per_round = epsilon / (2 * rounds)
@@ -104,10 +138,16 @@ def mwem_pgm(data_in,epsilon, lastsyn_load, delta=0.0, cliques_o=None,rounds=Non
      #IncreSyn: When the last synthetic data is given, run the select step once
     if lastsyn_load is not None: 
         print('Last synthetic data detected, adding selection')
-        cl = worst_approximated(workload_answers = answers, est = lastsyn_load, workload = workload, eps = exp_eps)
+        choice_cl = worst_approximated_eta(workload_answers = answers, est = lastsyn_load, workload = workload, eta=eta, eps = exp_eps)
+
+        for cl in choice_cl:
+            if cl not in cliques:
+                cliques.append(cl)
+            else:
+                rounds = rounds-1
+        
         eps_per_round = (epsilon - exp_eps) / (2 * rounds)
         sigma = 1.0 / eps_per_round #IncreSyn: Re-calculate sigma
-        cliques.append(cl)
 
     for i in range(1, rounds+1):
         ax = cliques[i-1] #IncreSyn: Switch the original select method to reading selected cliques line by line.
@@ -125,7 +165,13 @@ def mwem_pgm(data_in,epsilon, lastsyn_load, delta=0.0, cliques_o=None,rounds=Non
     time_consume=int(round((time_end-time_start) * 1000))
     print('Time cost:'+str(time_consume)+' ms. Saving model...')
     print('Generating Data...')
-    return est.synthetic_data()
+    syn = est.synthetic_data()
+    if lastsyn_load is not None:
+        error_comp = eta_test(data_in=data_in, lastsyn_load=lastsyn_load, syn=syn, workload=workload) #IncreSyn:Test for whether eta should gets bigger or not
+        if (error_comp == 1) and eta < eta_max:
+            eta +=1
+            print("Eta increased to "+str(eta))
+    return syn
 
 def default_params():
     """
@@ -148,6 +194,7 @@ def default_params():
     params['num_marginals'] = None
     params['max_cells'] = 10000
     params['lastsyn'] = None
+    params['eta'] = 5
 
     return params
 
@@ -172,6 +219,7 @@ if __name__ == "__main__":
     parser.add_argument('--pgm_iters', type=int, help='number of iterations')
     parser.add_argument('--save', type=str, help='path to save synthetic data')
     parser.add_argument('--lastsyn', help = 'last synthetic data')
+    parser.add_argument('--eta', type=int, help = 'Threshold of eta')
 
     parser.set_defaults(**default_params())
     args = parser.parse_args()
@@ -191,9 +239,10 @@ if __name__ == "__main__":
     synth = mwem_pgm(data, args.epsilon,lastsyn_load, args.delta, 
                     cliques_o=args.cliques,
                     rounds=args.rounds,
+                    workload=workload,
                     maxsize_mb=args.max_model_size,
-                    pgm_iters=args.pgm_iters
-                    )
+                    pgm_iters=args.pgm_iters,
+                    eta_max = args.eta)
     if args.save is not None:
         synth.df.to_csv(args.save, index=False)
 

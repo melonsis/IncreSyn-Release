@@ -20,6 +20,29 @@ already prepared source code of hdmm and mbi for dependences and put the "src"
 folder's path to PYTHONPATH.
 """
 
+def eta_test(data_in, lastsyn_load, syn, workload):
+    """
+    Test function for adaptively increse eta
+    data_in: Original data
+    lastsyn_load: Last synthetic data
+    syn: Synthetic data of this time
+    workload: The workload using for test
+    """
+    errors_last = []
+    errors_this = []
+    for proj in workload:
+        O = data_in.project(proj).datavector()
+        X = lastsyn_load.project(proj).datavector()
+        Y = syn.project(proj).datavector()
+        elast = 0.5*np.linalg.norm(O/O.sum() - X/X.sum(), 1)
+        ethis = 0.5*np.linalg.norm(O/O.sum() - Y/Y.sum(), 1)
+        errors_last.append(elast)
+        errors_this.append(ethis)
+
+    if np.mean(errors_this) < np.mean(errors_last):
+        return 1
+    else:
+        return 0 
 
 def powerset(iterable): # Calculting for powerset
     "powerset([1,2,3]) --> (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
@@ -42,15 +65,16 @@ def compile_workload(workload):
     return { cl : score(cl) for cl in downward_closure(workload) }
 
 class AIM(Mechanism):
-    def __init__(self,epsilon,delta,lastsyn_load,prng=None,rounds=None,max_model_size=80,structural_zeros={},cliques_in = "./data/cliques.csv"):  
+    def __init__(self,epsilon,delta,lastsyn_load,eta_max, prng=None,rounds=None,max_model_size=80,structural_zeros={},cliques_in = "./data/cliques.csv"):  
         super(AIM, self).__init__(epsilon, delta, prng)
         self.rounds = rounds
         self.max_model_size = max_model_size
         self.structural_zeros = structural_zeros
         self.cliques_in = cliques_in
-        self.lastsyn = lastsyn
-
-    def worst_approximated(self, candidates, answers, model, eps, sigma):
+        self.lastsyn_load = lastsyn_load
+        self.eta_max = eta_max
+        
+    def worst_approximated_eta(self, candidates, answers, model, eps, sigma, eta):
         errors = {}
         sensitivity = {}
         for cl in candidates:
@@ -61,9 +85,15 @@ class AIM(Mechanism):
             errors[cl] = wgt * (np.linalg.norm(x - xest, 1) - bias)
             sensitivity[cl] = abs(wgt) 
 
-    def run(self, data, W):
-        rounds = self.rounds or 16*len(data.domain) #IncreSyn: Here we using the original rounds limit, to achieve same 1-way calc budget
+        max_sensitivity = max(sensitivity.values()) # if all weights are 0, could be a problem
+        return self.exponential_mechanism_eta(errors, eta, eps, max_sensitivity)
     
+
+    def run(self, data, W):
+        
+        rounds = self.rounds or 16*len(data.domain) #IncreSyn: Here we using the original rounds limit, to achieve same 1-way calc budget
+        eta = 1 # IncreSyn: Initialzed an eta = 1
+
         cliques = []
         cliquepd = pd.read_csv(self.cliques_in).values.tolist() #IncreSyn: Get selected cliques
         for line in cliquepd:
@@ -93,14 +123,6 @@ class AIM(Mechanism):
         sigma = np.sqrt(rounds / (2*0.9*self.rho))
         time_start = time.time()
 
-        #IncreSyn: When the last synthetic data is given, run the select step once
-        if self.lastsyn_load is not None: 
-            print('Last synthetic data detected, adding selection')
-            epsilon = np.sqrt(8*0.1*self.rho/rounds)
-            rho_used += epsilon
-            cl = self.worst_approximated(workload, answers, lastsyn_load, epsilon, sigma)
-            cliques.append(cl)
-
         measurements = []
         
         print('Initial Sigma', sigma)
@@ -119,10 +141,30 @@ class AIM(Mechanism):
         remaining = self.rho - rho_used
         # IncreSyn: After the completion of a 1-way measurements, we reset the maximum number of rounds to be equal to the total length of cliques (with prefer attributes), in order to avoid allocating too much budget for 1-way measurements. 
         # Once this is set, the subsequent process can be considered as allocating a fixed budget per round.
-        rounds = len(cliques) 
+        if lastsyn_load is None:
+            rounds = len(cliques)
+        else:
+            rounds = len(cliques)+eta
         sigma = np.sqrt(rounds / (2 * remaining)) #IncreSyn: Re-design sigma
         print("!!!Re-design sigma after one-way!")
         print("New sigma:",sigma)
+
+          #IncreSyn: When the last synthetic data is given, run the select step once
+        if self.lastsyn_load is not None: 
+            print('Last synthetic data detected, adding selection')
+            epsilon = np.sqrt(8*0.1*self.rho/rounds)
+            #rho_used += epsilon
+            choice_cl = self.worst_approximated_eta(candidates, answers, lastsyn_load, epsilon, sigma,eta)
+            for cl in choice_cl:
+                if cl not in cliques:
+                    cliques.append(cl)
+                else:
+                    rounds = rounds-1
+            remaining = remaining - 1/sigma**2 
+            sigma = np.sqrt(rounds / (2 * remaining))  #IncreSyn: Re-design sigma after selection
+            print("!!!Re-design sigma after selection!")
+            print("New sigma:",sigma)
+        
 
         while t < rounds and not terminate:
             t += 1
@@ -153,6 +195,11 @@ class AIM(Mechanism):
         print('Time cost:'+str(time_consume)+' ms.Saving model, cliques and measurements...')
         print('Generating Data...')
         synth = model.synthetic_data()
+        if lastsyn_load is not None:
+            error_comp = eta_test(data_in=data, lastsyn_load=lastsyn_load, syn=synth, workload=workload) #IncreSyn:Test for whether eta should gets bigger or not
+            if (error_comp == 1) and eta < eta_max:
+                eta +=1
+                print("Eta increased to "+str(eta))
 
         return synth
 
@@ -174,6 +221,7 @@ def default_params():
     params['max_cells'] = 10000
     params['cliques'] = '../data/cliques.csv'
     params['lastsyn'] = None
+    params['eta'] = 5
 
     return params
         
@@ -193,6 +241,7 @@ if __name__ == "__main__":
     parser.add_argument('--save', type=str, help='path to save synthetic data')
     parser.add_argument('--cliques', help='cliques that used')
     parser.add_argument('--lastsyn', help = 'last synthetic data')
+    parser.add_argument('--eta', type=int, help = 'Threshold of eta')
 
     parser.set_defaults(**default_params())
     args = parser.parse_args()
@@ -211,7 +260,7 @@ if __name__ == "__main__":
 
 
     workload = [(cl, 1.0) for cl in workload]
-    mech = AIM(args.epsilon, args.delta, lastsyn_load, max_model_size=args.max_model_size,cliques_in = args.cliques)
+    mech = AIM(args.epsilon, args.delta, lastsyn_load, max_model_size=args.max_model_size,cliques_in = args.cliques, eta_max=args.eta)  
     synth = mech.run(data, workload)
 
     if args.save is not None: # Synthetic save process

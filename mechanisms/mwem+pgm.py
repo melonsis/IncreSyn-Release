@@ -172,7 +172,7 @@ if __name__ == "__main__":
                     workload=workload,
                     rounds=args.rounds,
                     maxsize_mb=args.max_model_size,
-                    pgm_iters=args.pgm_iters,
+                    pgm_iters=args.pgm_iters
                     )
 
     if args.save is not None:

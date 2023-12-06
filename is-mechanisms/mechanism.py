@@ -81,6 +81,38 @@ class Mechanism:
             p = softmax(0.5*epsilon/sensitivity*q + base_measure)
 
         return keys[self.prng.choice(p.size, p=p)]
+    
+    
+    def exponential_mechanism_eta(self, qualities, eta, epsilon, sensitivity=1.0, base_measure=None):
+        '''
+        Exponential mechanism in eta version
+        '''
+        if isinstance(qualities, dict):
+            #import pandas as pd
+            #print(pd.Series(list(qualities.values()), list(qualities.keys())).sort_values().tail())
+            keys = list(qualities.keys())
+            qualities = np.array([qualities[key] for key in keys])
+            if base_measure is not None:
+                base_measure = np.log([base_measure[key] for key in keys])
+        else:
+            qualities = np.array(qualities)
+            keys = np.arange(qualities.size)
+
+        """ Sample a candidate from the permute-and-flip mechanism """
+        q = qualities - qualities.max()
+        if base_measure is None:
+            p = softmax(0.5*epsilon/sensitivity*q)
+        else:
+            p = softmax(0.5*epsilon/sensitivity*q + base_measure)
+
+        clique_keys = self.prng.choice(p.size, p=p, size = eta)
+        choice_cl = []
+        for key in clique_keys:
+            choice_cl.append(keys[key])
+        return choice_cl
+
+
+
 
     def gaussian_noise_scale(self, l2_sensitivity, epsilon, delta):
         """ Return the Gaussian noise necessary to attain (epsilon, delta)-DP """
